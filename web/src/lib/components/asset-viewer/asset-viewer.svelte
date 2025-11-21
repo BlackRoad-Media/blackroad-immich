@@ -10,8 +10,8 @@
   import { activityManager } from '$lib/managers/activity-manager.svelte';
   import { assetViewerManager } from '$lib/managers/asset-viewer-manager.svelte';
   import { authManager } from '$lib/managers/auth-manager.svelte';
+  import { editManager, EditToolType } from '$lib/managers/edit/edit-manager.svelte';
   import type { TimelineAsset } from '$lib/managers/timeline-manager/types';
-  import { closeEditorCofirm } from '$lib/stores/asset-editor.store';
   import { assetViewingStore } from '$lib/stores/asset-viewing.store';
   import { ocrManager } from '$lib/stores/ocr.svelte';
   import { alwaysLoadOriginalVideo } from '$lib/stores/preferences.store';
@@ -106,7 +106,6 @@
   let isShowEditor = $state(false);
   let fullscreenElement = $state<Element>();
   let unsubscribes: (() => void)[] = [];
-  let selectedEditType: string = $state('');
   let stack: StackResponseDto | null = $state(null);
 
   let zoomToggle = $state(() => void 0);
@@ -202,10 +201,15 @@
     onClose?.(asset);
   };
 
-  const closeEditor = () => {
-    closeEditorCofirm(() => {
+  const closeEditor = async () => {
+    if (await editManager.closeConfirm()) {
+      // If edits were applied, refresh the asset to show the new image
+      if (editManager.hasAppliedEdits) {
+        const refreshedAsset = await getAssetInfo({ id: asset.id });
+        asset = refreshedAsset;
+      }
       isShowEditor = false;
-    });
+    }
   };
 
   const navigateAsset = async (order?: 'previous' | 'next', e?: Event) => {
@@ -243,12 +247,12 @@
     }
   };
 
-  // const showEditorHandler = () => {
-  //   if (isShowActivity) {
-  //     isShowActivity = false;
-  //   }
-  //   isShowEditor = !isShowEditor;
-  // };
+  const showEditor = () => {
+    if (assetViewerManager.isShowActivityPanel) {
+      assetViewerManager.isShowActivityPanel = false;
+    }
+    isShowEditor = !isShowEditor;
+  };
 
   const handleRunJob = async (name: AssetJobName) => {
     try {
@@ -347,10 +351,6 @@
     onAction?.(action);
   };
 
-  const handleUpdateSelectedEditType = (type: string) => {
-    selectedEditType = type;
-  };
-
   const handleAssetReplace = async ({ oldAssetId, newAssetId }: { oldAssetId: string; newAssetId: string }) => {
     if (oldAssetId !== asset.id) {
       return;
@@ -415,6 +415,7 @@
         {onUndoDelete}
         onRunJob={handleRunJob}
         onPlaySlideshow={() => ($slideshowState = SlideshowState.PlaySlideshow)}
+        onEdit={showEditor}
         onClose={onClose ? () => onClose(asset) : undefined}
         {playOriginalVideo}
         {setPlayOriginalVideo}
@@ -489,7 +490,7 @@
                 .toLowerCase()
                 .endsWith('.insp'))}
             <ImagePanoramaViewer bind:zoomToggle {asset} />
-          {:else if isShowEditor && selectedEditType === 'crop'}
+          {:else if isShowEditor && editManager.selectedTool?.type === EditToolType.Transform}
             <CropArea {asset} />
           {:else}
             <PhotoViewer
@@ -563,7 +564,7 @@
       class="row-start-1 row-span-4 w-[400px] overflow-y-auto transition-all dark:border-l dark:border-s-immich-dark-gray"
       translate="yes"
     >
-      <EditorPanel {asset} onUpdateSelectedType={handleUpdateSelectedEditType} onClose={closeEditor} />
+      <EditorPanel {asset} onClose={closeEditor} />
     </div>
   {/if}
 

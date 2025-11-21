@@ -8,6 +8,7 @@
   import ArchiveAction from '$lib/components/asset-viewer/actions/archive-action.svelte';
   import DeleteAction from '$lib/components/asset-viewer/actions/delete-action.svelte';
   import DownloadAction from '$lib/components/asset-viewer/actions/download-action.svelte';
+  import EditAction from '$lib/components/asset-viewer/actions/edit-action.svelte';
   import FavoriteAction from '$lib/components/asset-viewer/actions/favorite-action.svelte';
   import KeepThisDeleteOthersAction from '$lib/components/asset-viewer/actions/keep-this-delete-others.svelte';
   import RatingAction from '$lib/components/asset-viewer/actions/rating-action.svelte';
@@ -21,7 +22,7 @@
   import UnstackAction from '$lib/components/asset-viewer/actions/unstack-action.svelte';
   import ButtonContextMenu from '$lib/components/shared-components/context-menu/button-context-menu.svelte';
   import MenuOption from '$lib/components/shared-components/context-menu/menu-option.svelte';
-  import { AppRoute } from '$lib/constants';
+  import { AppRoute, ProjectionType } from '$lib/constants';
   import { featureFlagsManager } from '$lib/managers/feature-flags-manager.svelte';
   import { getGlobalActions } from '$lib/services/app.service';
   import { getAssetActions, handleReplaceAsset } from '$lib/services/asset.service';
@@ -73,7 +74,7 @@
     onUndoDelete?: OnUndoDelete;
     onRunJob: (name: AssetJobName) => void;
     onPlaySlideshow: () => void;
-    // export let showEditorHandler: () => void;
+    onEdit: () => void;
     onClose?: () => void;
     playOriginalVideo: boolean;
     setPlayOriginalVideo: (value: boolean) => void;
@@ -93,6 +94,7 @@
     onRunJob,
     onPlaySlideshow,
     onClose,
+    onEdit,
     playOriginalVideo = false,
     setPlayOriginalVideo,
   }: Props = $props();
@@ -115,15 +117,16 @@
 
   const { Share, Offline, PlayMotionPhoto, StopMotionPhoto, Info } = $derived(getAssetActions($t, asset));
 
-  // $: showEditorButton =
-  //   isOwner &&
-  //   asset.type === AssetTypeEnum.Image &&
-  //   !(
-  //     asset.exifInfo?.projectionType === ProjectionType.EQUIRECTANGULAR ||
-  //     (asset.originalPath && asset.originalPath.toLowerCase().endsWith('.insp'))
-  //   ) &&
-  //   !(asset.originalPath && asset.originalPath.toLowerCase().endsWith('.gif')) &&
-  //   !asset.livePhotoVideoId;
+  let showEditorButton = $derived(
+    isOwner &&
+      asset.type === AssetTypeEnum.Image &&
+      !(
+        asset.exifInfo?.projectionType === ProjectionType.EQUIRECTANGULAR ||
+        (asset.originalPath && asset.originalPath.toLowerCase().endsWith('.insp'))
+      ) &&
+      !(asset.originalPath && asset.originalPath.toLowerCase().endsWith('.gif')) &&
+      !asset.livePhotoVideoId,
+  );
 </script>
 
 <CommandPaletteDefaultProvider
@@ -176,6 +179,10 @@
     {#if isOwner}
       <FavoriteAction {asset} {onAction} />
       <RatingAction {asset} {onAction} />
+    {/if}
+
+    {#if showEditorButton}
+      <EditAction onAction={onEdit} />
     {/if}
 
     {#if isOwner}
