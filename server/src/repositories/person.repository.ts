@@ -218,14 +218,16 @@ export class PersonRepository {
   }
 
   @GenerateSql({ params: [DummyValue.UUID] })
-  getFaces(assetId: string, { isVisible = true }: { isVisible?: boolean } = {}) {
+  getFaces(assetId: string, options?: { isVisible?: boolean }) {
+    const isVisible = options === undefined ? true : options.isVisible;
+
     return this.db
       .selectFrom('asset_face')
       .selectAll('asset_face')
       .select(withPerson)
       .where('asset_face.assetId', '=', assetId)
       .where('asset_face.deletedAt', 'is', null)
-      .$if(isVisible, (qb) => qb.where('asset_face.isVisible', '=', true))
+      .$if(isVisible !== undefined, (qb) => qb.where('asset_face.isVisible', '=', isVisible!))
       .orderBy('asset_face.boundingBoxX1', 'asc')
       .execute();
   }
