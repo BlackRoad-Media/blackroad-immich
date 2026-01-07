@@ -378,7 +378,10 @@ export type JobItem =
   | { name: JobName.Ocr; data: IEntityJob }
 
   // Workflow
-  | { name: JobName.WorkflowRun; data: IWorkflowJob };
+  | { name: JobName.WorkflowRun; data: IWorkflowJob }
+
+  // Editor
+  | { name: JobName.AssetEditThumbnailGeneration; data: IEntityJob };
 
 export type VectorExtension = (typeof VECTOR_EXTENSIONS)[number];
 

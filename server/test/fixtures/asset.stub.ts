@@ -1044,7 +1044,7 @@ export const assetStub = {
       },
     ] as AssetEditActionItem[],
   }),
-  withRevertedEdits: Object.freeze({
+  withoutEdits: Object.freeze({
     id: 'asset-id',
     status: AssetStatus.Active,
     deviceAssetId: 'device-asset-id',

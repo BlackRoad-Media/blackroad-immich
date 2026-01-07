@@ -1,5 +1,4 @@
 import { AssetFace } from 'src/database';
-import { AssetEditAction } from 'src/dtos/editing.dto';
 import { AssetOcrResponseDto } from 'src/dtos/ocr.dto';
 import { SourceType } from 'src/enum';
 import { boundingBoxOverlap, checkFaceVisibility, checkOcrVisibility } from 'src/utils/editor';
@@ -77,11 +76,32 @@ const createFace = (params: Partial<AssetFace> = {}): AssetFace => ({
 describe('checkFaceVisibility', () => {
   const assetDimensions = { width: 1000, height: 1000 };
 
-  it('should return all faces as visible when no crop is provided', () => {
-    const faces = [createFace({ id: 'face-1' }), createFace({ id: 'face-2' })];
+  it('should return only non-visible faces when no crop is provided', () => {
+    const faces = [
+      createFace({ id: 'face-1', isVisible: true }),
+      createFace({ id: 'face-2', isVisible: false }),
+      createFace({ id: 'face-3', isVisible: false }),
+    ];
     const result = checkFaceVisibility(faces, assetDimensions);
 
     expect(result.visible).toHaveLength(2);
+    expect(result.hidden).toHaveLength(0);
+    expect(result.visible.map((f) => f.id)).toEqual(['face-2', 'face-3']);
+  });
+
+  it('should return all faces as visible when all are marked not visible and no crop provided', () => {
+    const faces = [createFace({ id: 'face-1', isVisible: false }), createFace({ id: 'face-2', isVisible: false })];
+    const result = checkFaceVisibility(faces, assetDimensions);
+
+    expect(result.visible).toHaveLength(2);
+    expect(result.hidden).toHaveLength(0);
+  });
+
+  it('should return empty visible array when all faces are already visible and no crop provided', () => {
+    const faces = [createFace({ id: 'face-1', isVisible: true }), createFace({ id: 'face-2', isVisible: true })];
+    const result = checkFaceVisibility(faces, assetDimensions);
+
+    expect(result.visible).toHaveLength(0);
     expect(result.hidden).toHaveLength(0);
   });
 
@@ -94,10 +114,7 @@ describe('checkFaceVisibility', () => {
 
   it('should mark face as visible when fully inside crop area', () => {
     const faces = [createFace({ boundingBoxX1: 100, boundingBoxY1: 100, boundingBoxX2: 200, boundingBoxY2: 200 })];
-    const crop = {
-      action: AssetEditAction.Crop,
-      parameters: { x: 0, y: 0, width: 500, height: 500 },
-    };
+    const crop = { x1: 0, y1: 0, x2: 500, y2: 500 };
 
     const result = checkFaceVisibility(faces, assetDimensions, crop);
 
@@ -107,10 +124,7 @@ describe('checkFaceVisibility', () => {
 
   it('should mark face as hidden when fully outside crop area', () => {
     const faces = [createFace({ boundingBoxX1: 600, boundingBoxY1: 600, boundingBoxX2: 700, boundingBoxY2: 700 })];
-    const crop = {
-      action: AssetEditAction.Crop,
-      parameters: { x: 0, y: 0, width: 500, height: 500 },
-    };
+    const crop = { x1: 0, y1: 0, x2: 500, y2: 500 };
 
     const result = checkFaceVisibility(faces, assetDimensions, crop);
 
@@ -121,10 +135,7 @@ describe('checkFaceVisibility', () => {
   it('should mark face as visible when at least 50% overlaps with crop', () => {
     // Face spans 100-200 (100px), crop starts at 150, so 50% overlap
     const faces = [createFace({ boundingBoxX1: 100, boundingBoxY1: 100, boundingBoxX2: 200, boundingBoxY2: 200 })];
-    const crop = {
-      action: AssetEditAction.Crop,
-      parameters: { x: 150, y: 100, width: 500, height: 500 },
-    };
+    const crop = { x1: 150, y1: 100, x2: 500, y2: 500 };
 
     const result = checkFaceVisibility(faces, assetDimensions, crop);
 
@@ -135,10 +146,7 @@ describe('checkFaceVisibility', () => {
   it('should mark face as hidden when less than 50% overlaps with crop', () => {
     // Face spans 100-200 (100px), crop starts at 160, so 40% overlap
     const faces = [createFace({ boundingBoxX1: 100, boundingBoxY1: 100, boundingBoxX2: 200, boundingBoxY2: 200 })];
-    const crop = {
-      action: AssetEditAction.Crop,
-      parameters: { x: 160, y: 100, width: 500, height: 500 },
-    };
+    const crop = { x1: 160, y1: 100, x2: 500, y2: 500 };
 
     const result = checkFaceVisibility(faces, assetDimensions, crop);
 
@@ -165,10 +173,7 @@ describe('checkFaceVisibility', () => {
         boundingBoxY2: 600,
       }),
     ];
-    const crop = {
-      action: AssetEditAction.Crop,
-      parameters: { x: 0, y: 0, width: 500, height: 500 },
-    };
+    const crop = { x1: 0, y1: 0, x2: 500, y2: 500 };
 
     const result = checkFaceVisibility(faces, assetDimensions, crop);
 
@@ -192,19 +197,100 @@ describe('checkFaceVisibility', () => {
         imageHeight: 500,
       }),
     ];
-    const crop = {
-      action: AssetEditAction.Crop,
-      parameters: { x: 0, y: 0, width: 200, height: 200 },
-    };
+    const crop = { x1: 0, y1: 0, x2: 200, y2: 200 };
 
     const result = checkFaceVisibility(faces, assetDimensions, crop);
 
     expect(result.visible).toHaveLength(1);
     expect(result.hidden).toHaveLength(0);
   });
+
+  it('should categorize based on crop overlap when crop is provided, regardless of isVisible property', () => {
+    const faces = [
+      createFace({
+        id: 'face-inside-visible',
+        boundingBoxX1: 100,
+        boundingBoxY1: 100,
+        boundingBoxX2: 200,
+        boundingBoxY2: 200,
+        isVisible: true,
+      }),
+      createFace({
+        id: 'face-inside-not-visible',
+        boundingBoxX1: 250,
+        boundingBoxY1: 250,
+        boundingBoxX2: 350,
+        boundingBoxY2: 350,
+        isVisible: false,
+      }),
+      createFace({
+        id: 'face-outside-visible',
+        boundingBoxX1: 800,
+        boundingBoxY1: 800,
+        boundingBoxX2: 900,
+        boundingBoxY2: 900,
+        isVisible: true,
+      }),
+      createFace({
+        id: 'face-outside-not-visible',
+        boundingBoxX1: 700,
+        boundingBoxY1: 700,
+        boundingBoxX2: 800,
+        boundingBoxY2: 800,
+        isVisible: false,
+      }),
+    ];
+    const crop = { x1: 0, y1: 0, x2: 500, y2: 500 };
+
+    const result = checkFaceVisibility(faces, assetDimensions, crop);
+
+    // When crop is provided, only overlap matters, not isVisible property
+    expect(result.visible).toHaveLength(2);
+    expect(result.hidden).toHaveLength(2);
+    expect(result.visible.map((f) => f.id)).toContain('face-inside-visible');
+    expect(result.visible.map((f) => f.id)).toContain('face-inside-not-visible');
+    expect(result.hidden.map((f) => f.id)).toContain('face-outside-visible');
+    expect(result.hidden.map((f) => f.id)).toContain('face-outside-not-visible');
+  });
+
+  it('should handle mixed visibility states with partial overlap and crop', () => {
+    const faces = [
+      createFace({
+        id: 'face-partial-50',
+        boundingBoxX1: 100,
+        boundingBoxY1: 100,
+        boundingBoxX2: 200,
+        boundingBoxY2: 200,
+        isVisible: true,
+      }),
+      createFace({
+        id: 'face-partial-40',
+        boundingBoxX1: 100,
+        boundingBoxY1: 100,
+        boundingBoxX2: 200,
+        boundingBoxY2: 200,
+        isVisible: false,
+      }),
+    ];
+    const crop1 = { x1: 150, y1: 100, x2: 500, y2: 500 }; // 50% overlap
+    const crop2 = { x1: 160, y1: 100, x2: 500, y2: 500 }; // 40% overlap
+
+    const result1 = checkFaceVisibility([faces[0]], assetDimensions, crop1);
+    const result2 = checkFaceVisibility([faces[1]], assetDimensions, crop2);
+
+    // 50% overlap should be visible
+    expect(result1.visible).toHaveLength(1);
+    expect(result1.hidden).toHaveLength(0);
+
+    // 40% overlap should be hidden
+    expect(result2.visible).toHaveLength(0);
+    expect(result2.hidden).toHaveLength(1);
+  });
 });
 
-const createOcr = (params: Partial<AssetOcrResponseDto> = {}): AssetOcrResponseDto => ({
+const createOcr = (
+  params: Partial<AssetOcrResponseDto & { isVisible: boolean }> = {},
+): AssetOcrResponseDto & { isVisible: boolean } => ({
   id: 'ocr-id',
   assetId: 'asset-id',
   x1: 0.1,
@@ -218,17 +304,39 @@ const createOcr = (params: Partial<AssetOcrResponseDto> = {}): AssetOcrResponseD
   boxScore: 0.9,
   textScore: 0.9,
   text: 'Sample Text',
+  isVisible: true,
   ...params,
 });
 
 describe('checkOcrVisibility', () => {
   const assetDimensions = { width: 1000, height: 1000 };
 
-  it('should return all OCR entries as visible when no crop is provided', () => {
-    const ocrs = [createOcr({ id: 'ocr-1' }), createOcr({ id: 'ocr-2' })];
+  it('should return only non-visible OCR entries when no crop is provided', () => {
+    const ocrs = [
+      createOcr({ id: 'ocr-1', isVisible: true }),
+      createOcr({ id: 'ocr-2', isVisible: false }),
+      createOcr({ id: 'ocr-3', isVisible: false }),
+    ];
     const result = checkOcrVisibility(ocrs, assetDimensions);
 
     expect(result.visible).toHaveLength(2);
+    expect(result.hidden).toHaveLength(0);
+    expect(result.visible.map((o) => o.id)).toEqual(['ocr-2', 'ocr-3']);
+  });
+
+  it('should return all OCR entries as visible when all are marked not visible and no crop provided', () => {
+    const ocrs = [createOcr({ id: 'ocr-1', isVisible: false }), createOcr({ id: 'ocr-2', isVisible: false })];
+    const result = checkOcrVisibility(ocrs, assetDimensions);
+
+    expect(result.visible).toHaveLength(2);
+    expect(result.hidden).toHaveLength(0);
+  });
+
+  it('should return empty visible array when all OCR entries are already visible and no crop provided', () => {
+    const ocrs = [createOcr({ id: 'ocr-1', isVisible: true }), createOcr({ id: 'ocr-2', isVisible: true })];
+    const result = checkOcrVisibility(ocrs, assetDimensions);
+
+    expect(result.visible).toHaveLength(0);
     expect(result.hidden).toHaveLength(0);
   });
 
@@ -242,10 +350,7 @@ describe('checkOcrVisibility', () => {
   it('should mark OCR as visible when fully inside crop area', () => {
     // OCR box at normalized coords 0.1-0.2 = 100-200px in 1000x1000 image
     const ocrs = [createOcr()];
-    const crop = {
-      action: AssetEditAction.Crop,
-      parameters: { x: 0, y: 0, width: 500, height: 500 },
-    };
+    const crop = { x1: 0, y1: 0, x2: 500, y2: 500 };
 
     const result = checkOcrVisibility(ocrs, assetDimensions, crop);
 
@@ -256,10 +361,7 @@ describe('checkOcrVisibility', () => {
   it('should mark OCR as hidden when fully outside crop area', () => {
     // OCR box at normalized coords 0.8-0.9 = 800-900px
     const ocrs = [createOcr({ x1: 0.8, y1: 0.8, x2: 0.9, y2: 0.8, x3: 0.9, y3: 0.9, x4: 0.8, y4: 0.9 })];
-    const crop = {
-      action: AssetEditAction.Crop,
-      parameters: { x: 0, y: 0, width: 500, height: 500 },
-    };
+    const crop = { x1: 0, y1: 0, x2: 500, y2: 500 };
 
     const result = checkOcrVisibility(ocrs, assetDimensions, crop);
 
@@ -270,10 +372,7 @@ describe('checkOcrVisibility', () => {
   it('should mark OCR as visible when at least 50% overlaps with crop', () => {
     // OCR at 100-200px (0.1-0.2 normalized), crop starts at 150
     const ocrs = [createOcr()];
-    const crop = {
-      action: AssetEditAction.Crop,
-      parameters: { x: 150, y: 100, width: 500, height: 500 },
-    };
+    const crop = { x1: 150, y1: 100, x2: 500, y2: 500 };
 
     const result = checkOcrVisibility(ocrs, assetDimensions, crop);
 
@@ -284,10 +383,7 @@ describe('checkOcrVisibility', () => {
   it('should mark OCR as hidden when less than 50% overlaps with crop', () => {
     // OCR at 100-200px, crop starts at 160 = 40% overlap
     const ocrs = [createOcr()];
-    const crop = {
-      action: AssetEditAction.Crop,
-      parameters: { x: 160, y: 100, width: 500, height: 500 },
-    };
+    const crop = { x1: 160, y1: 100, x2: 500, y2: 500 };
 
     const result = checkOcrVisibility(ocrs, assetDimensions, crop);
 
@@ -300,10 +396,7 @@ describe('checkOcrVisibility', () => {
       createOcr({ id: 'ocr-inside', x1: 0.1, y1: 0.1, x2: 0.2, y2: 0.1, x3: 0.2, y3: 0.2, x4: 0.1, y4: 0.2 }),
       createOcr({ id: 'ocr-outside', x1: 0.8, y1: 0.8, x2: 0.9, y2: 0.8, x3: 0.9, y3: 0.9, x4: 0.8, y4: 0.9 }),
     ];
-    const crop = {
-      action: AssetEditAction.Crop,
-      parameters: { x: 0, y: 0, width: 500, height: 500 },
-    };
+    const crop = { x1: 0, y1: 0, x2: 500, y2: 500 };
 
     const result = checkOcrVisibility(ocrs, assetDimensions, crop);
 
@@ -328,10 +421,7 @@ describe('checkOcrVisibility', () => {
         y4: 0.15, // left
       }),
     ];
-    const crop = {
-      action: AssetEditAction.Crop,
-      parameters: { x: 0, y: 0, width: 500, height: 500 },
-    };
+    const crop = { x1: 0, y1: 0, x2: 500, y2: 500 };
 
     const result = checkOcrVisibility(ocrs, assetDimensions, crop);
 
@@ -343,14 +433,73 @@ describe('checkOcrVisibility', () => {
     const smallDimensions = { width: 500, height: 500 };
     // OCR at 0.1-0.2 normalized = 50-100px in 500x500 image
     const ocrs = [createOcr()];
-    const crop = {
-      action: AssetEditAction.Crop,
-      parameters: { x: 0, y: 0, width: 200, height: 200 },
-    };
+    const crop = { x1: 0, y1: 0, x2: 200, y2: 200 };
 
     const result = checkOcrVisibility(ocrs, smallDimensions, crop);
 
     expect(result.visible).toHaveLength(1);
     expect(result.hidden).toHaveLength(0);
+  });
+
+  it('should categorize based on crop overlap when crop is provided, regardless of isVisible property', () => {
+    const ocrs = [
+      createOcr({ id: 'ocr-inside-visible', isVisible: true }), // Inside crop, already visible
+      createOcr({ id: 'ocr-inside-not-visible', isVisible: false }), // Inside crop, not visible
+      createOcr({
+        id: 'ocr-outside-visible',
+        x1: 0.8,
+        y1: 0.8,
+        x2: 0.9,
+        y2: 0.8,
+        x3: 0.9,
+        y3: 0.9,
+        x4: 0.8,
+        y4: 0.9,
+        isVisible: true,
+      }), // Outside crop, already visible
+      createOcr({
+        id: 'ocr-outside-not-visible',
+        x1: 0.8,
+        y1: 0.8,
+        x2: 0.9,
+        y2: 0.8,
+        x3: 0.9,
+        y3: 0.9,
+        x4: 0.8,
+        y4: 0.9,
+        isVisible: false,
+      }), // Outside crop, not visible
+    ];
+    const crop = { x1: 0, y1: 0, x2: 500, y2: 500 };
+
+    const result = checkOcrVisibility(ocrs, assetDimensions, crop);
+
+    // When crop is provided, only overlap matters, not isVisible property
+    expect(result.visible).toHaveLength(2);
+    expect(result.hidden).toHaveLength(2);
+    expect(result.visible.map((o) => o.id)).toContain('ocr-inside-visible');
+    expect(result.visible.map((o) => o.id)).toContain('ocr-inside-not-visible');
+    expect(result.hidden.map((o) => o.id)).toContain('ocr-outside-visible');
+    expect(result.hidden.map((o) => o.id)).toContain('ocr-outside-not-visible');
+  });
+
+  it('should handle mixed visibility states with partial overlap and crop', () => {
+    const ocrs = [
+      createOcr({ id: 'ocr-partial-50', isVisible: true }), // 50% overlap
+      createOcr({ id: 'ocr-partial-40', isVisible: false }), // 40% overlap
+    ];
+    const crop1 = { x1: 150, y1: 100, x2: 500, y2: 500 }; // 50% overlap
+    const crop2 = { x1: 160, y1: 100, x2: 500, y2: 500 }; // 40% overlap
+
+    const result1 = checkOcrVisibility([ocrs[0]], assetDimensions, crop1);
+    const result2 = checkOcrVisibility([ocrs[1]], assetDimensions, crop2);
+
+    // 50% overlap should be visible
+    expect(result1.visible).toHaveLength(1);
+    expect(result1.hidden).toHaveLength(0);
+
+    // 40% overlap should be hidden
+    expect(result2.visible).toHaveLength(0);
+    expect(result2.hidden).toHaveLength(1);
   });
 });

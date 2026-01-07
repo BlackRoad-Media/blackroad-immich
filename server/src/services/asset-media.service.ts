@@ -199,17 +199,19 @@ export class AssetMediaService extends BaseService {
 
     const asset = await this.findOrFail(id);
 
-    if (asset.edits!.length > 0 && (dto.edited ?? true)) {
+    if (asset.edits!.length > 0 && (dto.edited ?? false)) {
       const { editedFullsizeFile } = getAssetFiles(asset.files ?? []);
 
-      if (editedFullsizeFile) {
-        return new ImmichFileResponse({
-          path: editedFullsizeFile.path,
-          fileName: getFileNameWithoutExtension(asset.originalFileName) + getFilenameExtension(editedFullsizeFile.path),
-          contentType: mimeTypes.lookup(editedFullsizeFile.path),
-          cacheControl: CacheControl.PrivateWithCache,
-        });
+      if (!editedFullsizeFile) {
+        throw new NotFoundException('Edited asset media not found');
       }
+
+      return new ImmichFileResponse({
+        path: editedFullsizeFile.path,
+        fileName: getFileNameWithoutExtension(asset.originalFileName) + getFilenameExtension(editedFullsizeFile.path),
+        contentType: mimeTypes.lookup(editedFullsizeFile.path),
+        cacheControl: CacheControl.PrivateWithCache,
+      });
     }
 
     return new ImmichFileResponse({
@@ -232,7 +234,7 @@ export class AssetMediaService extends BaseService {
 
     const files = getAssetFiles(asset.files ?? []);
 
-    const requestingEdited = (dto.edited ?? true) && asset.edits!.length > 0;
+    const requestingEdited = (dto.edited ?? false) && asset.edits!.length > 0;
     const { fullsizeFile, previewFile, thumbnailFile } = {
       fullsizeFile: requestingEdited ? files.editedFullsizeFile : files.fullsizeFile,
       previewFile: requestingEdited ? files.editedPreviewFile : files.previewFile,

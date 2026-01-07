@@ -553,10 +553,7 @@ export class AssetService extends BaseService {
     }
 
     const newEdits = await this.assetEditRepository.replaceAll(id, dto.edits);
-    await this.jobRepository.queue({
-      name: JobName.AssetGenerateThumbnails,
-      data: { id, source: 'edit', notify: true },
-    });
+    await this.jobRepository.queue({ name: JobName.AssetEditThumbnailGeneration, data: { id } });
 
     // Return the asset and its applied edits
     return {
@@ -574,9 +571,6 @@ export class AssetService extends BaseService {
     }
 
     await this.assetEditRepository.replaceAll(id, []);
-    await this.jobRepository.queue({
-      name: JobName.AssetGenerateThumbnails,
-      data: { id, source: 'edit', notify: true },
-    });
+    await this.jobRepository.queue({ name: JobName.AssetEditThumbnailGeneration, data: { id } });
   }
 }

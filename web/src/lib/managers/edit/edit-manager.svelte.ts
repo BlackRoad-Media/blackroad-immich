@@ -114,8 +114,8 @@ export class EditManager {
     try {
       // Setup the websocket listener before sending the edit request
       const editCompleted = waitForWebsocketEvent(
-        'on_upload_success',
-        (asset) => asset.id === this.currentAsset!.id,
+        'AssetEditReadyV1',
+        (event) => event.assetId === this.currentAsset!.id,
         10_000,
       );
 
@@ -123,7 +123,7 @@ export class EditManager {
         ? removeAssetEdits({ id: this.currentAsset!.id })
         : editAsset({
             id: this.currentAsset!.id,
-            editActionListDto: {
+            assetEditActionListDto: {
               edits,
             },
           }));

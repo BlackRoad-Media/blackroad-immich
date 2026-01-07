@@ -3688,7 +3688,7 @@
             "required": false,
             "in": "query",
             "schema": {
-              "default": true,
+              "default": false,
               "type": "boolean"
             }
           },
@@ -3857,6 +3857,7 @@
             "required": false,
             "in": "query",
             "schema": {
+              "default": false,
               "type": "boolean"
             }
           },
@@ -17023,6 +17024,7 @@
           "AssetDetectFaces",
           "AssetDetectDuplicatesQueueAll",
           "AssetDetectDuplicates",
+          "AssetEditThumbnailGeneration",
           "AssetEncodeVideoQueueAll",
           "AssetEncodeVideo",
           "AssetEmptyTrash",
@@ -18997,7 +18999,8 @@
           "notifications",
           "backupDatabase",
           "ocr",
-          "workflow"
+          "workflow",
+          "editor"
         ],
         "type": "string"
       },
@@ -19104,6 +19107,9 @@
           "duplicateDetection": {
             "$ref": "#/components/schemas/QueueResponseLegacyDto"
           },
+          "editor": {
+            "$ref": "#/components/schemas/QueueResponseLegacyDto"
+          },
           "faceDetection": {
             "$ref": "#/components/schemas/QueueResponseLegacyDto"
           },
@@ -19151,6 +19157,7 @@
           "backgroundTask",
           "backupDatabase",
           "duplicateDetection",
+          "editor",
           "faceDetection",
           "facialRecognition",
           "library",
@@ -22023,6 +22030,9 @@
           "backgroundTask": {
             "$ref": "#/components/schemas/JobSettingsDto"
           },
+          "editor": {
+            "$ref": "#/components/schemas/JobSettingsDto"
+          },
           "faceDetection": {
             "$ref": "#/components/schemas/JobSettingsDto"
           },
@@ -22062,6 +22072,7 @@
         },
         "required": [
           "backgroundTask",
+          "editor",
           "faceDetection",
           "library",
           "metadataExtraction",

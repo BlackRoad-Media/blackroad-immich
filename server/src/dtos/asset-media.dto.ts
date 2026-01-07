@@ -20,7 +20,7 @@ export class AssetMediaOptionsDto {
   @ValidateEnum({ enum: AssetMediaSize, name: 'AssetMediaSize', optional: true })
   size?: AssetMediaSize;
 
-  @ValidateBoolean({ optional: true })
+  @ValidateBoolean({ optional: true, default: false })
   edited?: boolean;
 }
 

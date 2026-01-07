@@ -537,7 +537,7 @@ describe(AssetMediaService.name, () => {
       mocks.access.asset.checkOwnerAccess.mockResolvedValue(new Set(['asset-1']));
       mocks.asset.getById.mockResolvedValue(editedAsset);
 
-      await expect(sut.downloadOriginal(authStub.admin, 'asset-1', {})).resolves.toEqual(
+      await expect(sut.downloadOriginal(authStub.admin, 'asset-1', { edited: true })).resolves.toEqual(
         new ImmichFileResponse({
           path: '/uploads/user-id/fullsize/edited.jpg',
           fileName: 'asset-id.jpg',
@@ -611,17 +611,12 @@ describe(AssetMediaService.name, () => {
       );
     });
 
-    it('should download original file when edits exist but no edited file available', async () => {
+    it('should throw a not found when edits exist but no edited file available', async () => {
       mocks.access.asset.checkOwnerAccess.mockResolvedValue(new Set(['asset-1']));
       mocks.asset.getById.mockResolvedValue(assetStub.withCropEdit);
 
-      await expect(sut.downloadOriginal(authStub.admin, 'asset-1', {})).resolves.toEqual(
-        new ImmichFileResponse({
-          path: '/original/path.jpg',
-          fileName: 'asset-id.jpg',
-          contentType: 'image/jpeg',
-          cacheControl: CacheControl.PrivateWithCache,
-        }),
+      await expect(sut.downloadOriginal(authStub.admin, 'asset-1', { edited: true })).rejects.toBeInstanceOf(
+        NotFoundException,
       );
     });
   });

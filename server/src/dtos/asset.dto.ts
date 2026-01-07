@@ -198,7 +198,7 @@ export class AssetCopyDto {
 }
 
 export class AssetDownloadOriginalDto {
-  @ValidateBoolean({ optional: true, default: true })
+  @ValidateBoolean({ optional: true, default: false })
   edited?: boolean;
 }
 

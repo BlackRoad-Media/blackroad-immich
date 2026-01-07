@@ -769,6 +769,7 @@ export type QueuesResponseLegacyDto = {
     backgroundTask: QueueResponseLegacyDto;
     backupDatabase: QueueResponseLegacyDto;
     duplicateDetection: QueueResponseLegacyDto;
+    editor: QueueResponseLegacyDto;
     faceDetection: QueueResponseLegacyDto;
     facialRecognition: QueueResponseLegacyDto;
     library: QueueResponseLegacyDto;
@@ -1504,6 +1505,7 @@ export type JobSettingsDto = {
 };
 export type SystemConfigJobDto = {
     backgroundTask: JobSettingsDto;
+    editor: JobSettingsDto;
     faceDetection: JobSettingsDto;
     library: JobSettingsDto;
     metadataExtraction: JobSettingsDto;
@@ -5511,7 +5513,8 @@ export enum QueueName {
     Notifications = "notifications",
     BackupDatabase = "backupDatabase",
     Ocr = "ocr",
-    Workflow = "workflow"
+    Workflow = "workflow",
+    Editor = "editor"
 }
 export enum QueueCommand {
     Start = "start",
@@ -5556,6 +5559,7 @@ export enum JobName {
     AssetDetectFaces = "AssetDetectFaces",
     AssetDetectDuplicatesQueueAll = "AssetDetectDuplicatesQueueAll",
     AssetDetectDuplicates = "AssetDetectDuplicates",
+    AssetEditThumbnailGeneration = "AssetEditThumbnailGeneration",
     AssetEncodeVideoQueueAll = "AssetEncodeVideoQueueAll",
     AssetEncodeVideo = "AssetEncodeVideo",
     AssetEmptyTrash = "AssetEmptyTrash",

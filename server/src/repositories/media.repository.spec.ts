@@ -1,9 +1,10 @@
 import sharp from 'sharp';
 import { AssetFace } from 'src/database';
-import { AssetEditAction, AssetEditActionCrop, MirrorAxis } from 'src/dtos/editing.dto';
+import { AssetEditAction, MirrorAxis } from 'src/dtos/editing.dto';
 import { AssetOcrResponseDto } from 'src/dtos/ocr.dto';
 import { SourceType } from 'src/enum';
 import { LoggingRepository } from 'src/repositories/logging.repository';
+import { BoundingBox } from 'src/repositories/machine-learning.repository';
 import { MediaRepository } from 'src/repositories/media.repository';
 import { checkFaceVisibility, checkOcrVisibility } from 'src/utils/editor';
 import { automock } from 'test/utils';
@@ -345,21 +346,38 @@ describe(MediaRepository.name, () => {
     const assetDimensions = { width: 1000, height: 800 };
 
     describe('with no crop edit', () => {
-      it('should return all faces as visible when no crop is provided', () => {
+      it('should return only currently invisible faces when no crop is provided', () => {
+        const visibleFace = { ...baseFace, id: 'face-visible', isVisible: true };
+        const invisibleFace = { ...baseFace, id: 'face-invisible', isVisible: false };
+        const faces = [visibleFace, invisibleFace];
+        const result = checkFaceVisibility(faces, assetDimensions);
+
+        expect(result.visible).toEqual([invisibleFace]);
+        expect(result.hidden).toEqual([]);
+      });
+
+      it('should return empty arrays when all faces are already visible and no crop is provided', () => {
         const faces = [baseFace];
         const result = checkFaceVisibility(faces, assetDimensions);
 
-        expect(result.visible).toEqual(faces);
+        expect(result.visible).toEqual([]);
+        expect(result.hidden).toEqual([]);
+      });
+
+      it('should return all faces when all are invisible and no crop is provided', () => {
+        const face1 = { ...baseFace, id: 'face-1', isVisible: false };
+        const face2 = { ...baseFace, id: 'face-2', isVisible: false };
+        const faces = [face1, face2];
+        const result = checkFaceVisibility(faces, assetDimensions);
+
+        expect(result.visible).toEqual([face1, face2]);
         expect(result.hidden).toEqual([]);
       });
     });
 
     describe('with crop edit', () => {
       it('should mark face as visible when fully inside crop area', () => {
-        const crop: AssetEditActionCrop = {
-          action: AssetEditAction.Crop,
-          parameters: { x: 0, y: 0, width: 500, height: 400 },
-        };
+        const crop: BoundingBox = { x1: 0, y1: 0, x2: 500, y2: 400 };
         const faces = [baseFace];
         const result = checkFaceVisibility(faces, assetDimensions, crop);
 
@@ -368,10 +386,7 @@ describe(MediaRepository.name, () => {
       });
 
       it('should mark face as visible when more than 50% inside crop area', () => {
-        const crop: AssetEditActionCrop = {
-          action: AssetEditAction.Crop,
-          parameters: { x: 150, y: 150, width: 500, height: 400 },
-        };
+        const crop: BoundingBox = { x1: 150, y1: 150, x2: 650, y2: 550 };
         // Face at (100,100)-(200,200), crop starts at (150,150)
         // Overlap: (150,150)-(200,200) = 50x50 = 2500
         // Face area: 100x100 = 10000
@@ -384,10 +399,7 @@ describe(MediaRepository.name, () => {
       });
 
       it('should mark face as hidden when less than 50% inside crop area', () => {
-        const crop: AssetEditActionCrop = {
-          action: AssetEditAction.Crop,
-          parameters: { x: 250, y: 250, width: 500, height: 400 },
-        };
+        const crop: BoundingBox = { x1: 250, y1: 250, x2: 750, y2: 650 };
         // Face completely outside crop area
         const faces = [baseFace];
         const result = checkFaceVisibility(faces, assetDimensions, crop);
@@ -397,10 +409,7 @@ describe(MediaRepository.name, () => {
       });
 
       it('should mark face as hidden when completely outside crop area', () => {
-        const crop: AssetEditActionCrop = {
-          action: AssetEditAction.Crop,
-          parameters: { x: 500, y: 500, width: 200, height: 200 },
-        };
+        const crop: BoundingBox = { x1: 500, y1: 500, x2: 700, y2: 700 };
         const faces = [baseFace];
         const result = checkFaceVisibility(faces, assetDimensions, crop);
 
@@ -409,10 +418,7 @@ describe(MediaRepository.name, () => {
       });
 
       it('should handle multiple faces with mixed visibility', () => {
-        const crop: AssetEditActionCrop = {
-          action: AssetEditAction.Crop,
-          parameters: { x: 0, y: 0, width: 300, height: 300 },
-        };
+        const crop: BoundingBox = { x1: 0, y1: 0, x2: 300, y2: 300 };
         const faceInside: AssetFace = {
           ...baseFace,
           id: 'face-inside',
@@ -449,10 +455,7 @@ describe(MediaRepository.name, () => {
           boundingBoxX2: 100,
           boundingBoxY2: 100,
         };
-        const crop: AssetEditActionCrop = {
-          action: AssetEditAction.Crop,
-          parameters: { x: 50, y: 0, width: 100, height: 100 },
-        };
+        const crop: BoundingBox = { x1: 50, y1: 0, x2: 150, y2: 100 };
         const faces = [faceAtEdge];
         const result = checkFaceVisibility(faces, assetDimensions, crop);
 
@@ -465,10 +468,7 @@ describe(MediaRepository.name, () => {
       it('should handle faces when asset dimensions differ from face image dimensions', () => {
         // Face stored at 1000x800 resolution, but displaying at 500x400
         const scaledDimensions = { width: 500, height: 400 };
-        const crop: AssetEditActionCrop = {
-          action: AssetEditAction.Crop,
-          parameters: { x: 0, y: 0, width: 250, height: 200 },
-        };
+        const crop: BoundingBox = { x1: 0, y1: 0, x2: 250, y2: 200 };
         // Face at (100,100)-(200,200) on 1000x800
         // Scaled to 500x400: (50,50)-(100,100)
         // Crop at (0,0)-(250,200) - face is fully inside
@@ -479,59 +479,10 @@ describe(MediaRepository.name, () => {
         expect(result.hidden).toEqual([]);
       });
     });
-
-    describe('visibility is only affected by crop (not rotate or mirror)', () => {
-      it('should keep all faces visible when there is no crop regardless of other transforms', () => {
-        // Rotate and mirror edits don't affect visibility - only crop does
-        // The visibility functions only take an optional crop parameter
-        const faces = [baseFace];
-
-        // Without any crop, all faces remain visible
-        const result = checkFaceVisibility(faces, assetDimensions);
-
-        expect(result.visible).toEqual(faces);
-        expect(result.hidden).toEqual([]);
-      });
-
-      it('should only consider crop for visibility calculation', () => {
-        // Even if the image will be rotated/mirrored, visibility is determined
-        // solely by whether the face overlaps with the crop area
-        const crop: AssetEditActionCrop = {
-          action: AssetEditAction.Crop,
-          parameters: { x: 0, y: 0, width: 300, height: 300 },
-        };
-
-        const faceInsideCrop: AssetFace = {
-          ...baseFace,
-          id: 'face-inside',
-          boundingBoxX1: 50,
-          boundingBoxY1: 50,
-          boundingBoxX2: 150,
-          boundingBoxY2: 150,
-        };
-
-        const faceOutsideCrop: AssetFace = {
-          ...baseFace,
-          id: 'face-outside',
-          boundingBoxX1: 400,
-          boundingBoxY1: 400,
-          boundingBoxX2: 500,
-          boundingBoxY2: 500,
-        };
-
-        const faces = [faceInsideCrop, faceOutsideCrop];
-        const result = checkFaceVisibility(faces, assetDimensions, crop);
-
-        // Face inside crop area is visible, face outside is hidden
-        // This is true regardless of any subsequent rotate/mirror operations
-        expect(result.visible).toEqual([faceInsideCrop]);
-        expect(result.hidden).toEqual([faceOutsideCrop]);
-      });
-    });
   });
 
   describe('checkOcrVisibility', () => {
-    const baseOcr: AssetOcrResponseDto = {
+    const baseOcr: AssetOcrResponseDto & { isVisible: boolean } = {
       id: 'ocr-1',
       assetId: 'asset-1',
       x1: 0.1,
@@ -545,26 +496,45 @@ describe(MediaRepository.name, () => {
       boxScore: 0.9,
       textScore: 0.85,
       text: 'Test OCR',
+      isVisible: false,
     };
 
     const assetDimensions = { width: 1000, height: 800 };
 
     describe('with no crop edit', () => {
-      it('should return all OCR items as visible when no crop is provided', () => {
-        const ocrs = [baseOcr];
+      it('should return only currently invisible OCR items when no crop is provided', () => {
+        const visibleOcr = { ...baseOcr, id: 'ocr-visible', isVisible: true };
+        const invisibleOcr = { ...baseOcr, id: 'ocr-invisible', isVisible: false };
+        const ocrs = [visibleOcr, invisibleOcr];
         const result = checkOcrVisibility(ocrs, assetDimensions);
 
-        expect(result.visible).toEqual(ocrs);
+        expect(result.visible).toEqual([invisibleOcr]);
+        expect(result.hidden).toEqual([]);
+      });
+
+      it('should return empty arrays when all OCR items are already visible and no crop is provided', () => {
+        const visibleOcr = { ...baseOcr, isVisible: true };
+        const ocrs = [visibleOcr];
+        const result = checkOcrVisibility(ocrs, assetDimensions);
+
+        expect(result.visible).toEqual([]);
+        expect(result.hidden).toEqual([]);
+      });
+
+      it('should return all OCR items when all are invisible and no crop is provided', () => {
+        const ocr1 = { ...baseOcr, id: 'ocr-1', isVisible: false };
+        const ocr2 = { ...baseOcr, id: 'ocr-2', isVisible: false };
+        const ocrs = [ocr1, ocr2];
+        const result = checkOcrVisibility(ocrs, assetDimensions);
+
+        expect(result.visible).toEqual([ocr1, ocr2]);
         expect(result.hidden).toEqual([]);
       });
     });
 
     describe('with crop edit', () => {
       it('should mark OCR as visible when fully inside crop area', () => {
-        const crop: AssetEditActionCrop = {
-          action: AssetEditAction.Crop,
-          parameters: { x: 0, y: 0, width: 500, height: 400 },
-        };
+        const crop: BoundingBox = { x1: 0, y1: 0, x2: 500, y2: 400 };
         // OCR box: (0.1,0.1)-(0.2,0.2) on 1000x800 = (100,80)-(200,160)
         // Crop: (0,0)-(500,400) - OCR fully inside
         const ocrs = [baseOcr];
@@ -575,10 +545,7 @@ describe(MediaRepository.name, () => {
       });
 
       it('should mark OCR as hidden when completely outside crop area', () => {
-        const crop: AssetEditActionCrop = {
-          action: AssetEditAction.Crop,
-          parameters: { x: 500, y: 500, width: 200, height: 200 },
-        };
+        const crop: BoundingBox = { x1: 500, y1: 500, x2: 700, y2: 700 };
         // OCR box: (100,80)-(200,160) - completely outside crop
         const ocrs = [baseOcr];
         const result = checkOcrVisibility(ocrs, assetDimensions, crop);
@@ -588,10 +555,7 @@ describe(MediaRepository.name, () => {
       });
 
       it('should mark OCR as hidden when less than 50% inside crop area', () => {
-        const crop: AssetEditActionCrop = {
-          action: AssetEditAction.Crop,
-          parameters: { x: 150, y: 120, width: 500, height: 400 },
-        };
+        const crop: BoundingBox = { x1: 150, y1: 120, x2: 650, y2: 520 };
         // OCR box: (100,80)-(200,160)
         // Crop: (150,120)-(650,520)
         // Overlap: (150,120)-(200,160) = 50x40 = 2000
@@ -605,15 +569,12 @@ describe(MediaRepository.name, () => {
       });
 
       it('should handle multiple OCR items with mixed visibility', () => {
-        const crop: AssetEditActionCrop = {
-          action: AssetEditAction.Crop,
-          parameters: { x: 0, y: 0, width: 300, height: 300 },
-        };
-        const ocrInside: AssetOcrResponseDto = {
+        const crop: BoundingBox = { x1: 0, y1: 0, x2: 300, y2: 300 };
+        const ocrInside = {
           ...baseOcr,
           id: 'ocr-inside',
         };
-        const ocrOutside: AssetOcrResponseDto = {
+        const ocrOutside = {
           ...baseOcr,
           id: 'ocr-outside',
           x1: 0.5,
@@ -634,7 +595,7 @@ describe(MediaRepository.name, () => {
 
       it('should handle OCR boxes with rotated/skewed polygons', () => {
         // OCR with a rotated bounding box (not axis-aligned)
-        const rotatedOcr: AssetOcrResponseDto = {
+        const rotatedOcr = {
           ...baseOcr,
           id: 'ocr-rotated',
           x1: 0.15,
@@ -646,10 +607,7 @@ describe(MediaRepository.name, () => {
           x4: 0.1,
           y4: 0.2,
         };
-        const crop: AssetEditActionCrop = {
-          action: AssetEditAction.Crop,
-          parameters: { x: 0, y: 0, width: 300, height: 300 },
-        };
+        const crop: BoundingBox = { x1: 0, y1: 0, x2: 300, y2: 300 };
         const ocrs = [rotatedOcr];
         const result = checkOcrVisibility(ocrs, assetDimensions, crop);
 
@@ -674,18 +632,15 @@ describe(MediaRepository.name, () => {
       it('should only consider crop for visibility calculation', () => {
         // Even if the image will be rotated/mirrored, visibility is determined
         // solely by whether the OCR box overlaps with the crop area
-        const crop: AssetEditActionCrop = {
-          action: AssetEditAction.Crop,
-          parameters: { x: 0, y: 0, width: 300, height: 300 },
-        };
+        const crop: BoundingBox = { x1: 0, y1: 0, x2: 300, y2: 300 };
 
-        const ocrInsideCrop: AssetOcrResponseDto = {
+        const ocrInsideCrop = {
           ...baseOcr,
           id: 'ocr-inside',
           // OCR at (0.1,0.1)-(0.2,0.2) = (100,80)-(200,160) on 1000x800, inside crop
         };
 
-        const ocrOutsideCrop: AssetOcrResponseDto = {
+        const ocrOutsideCrop = {
           ...baseOcr,
           id: 'ocr-outside',
           x1: 0.5,
